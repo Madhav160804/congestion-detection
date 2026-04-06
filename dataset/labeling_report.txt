@@ -1,0 +1,150 @@
+Host-Flow Congestion Evidence Framework (HF-CEF) — Labeling Report
+====================================================================
+
+LABELING DATA SOURCES
+---------------------
+Labels are derived EXCLUSIVELY from host-observable flow signals:
+  • iperf3 — RTT, RTT variance, retransmits, achieved throughput
+  • ICMP ping — round-trip latency (independent of TCP)
+  • ss -tin  — kernel TCP socket stats: min_rtt, retrans, lost, delivery_rate
+
+Switch qdisc metrics (backlog, dropped_delta, overlimits) are
+recorded in the dataset but play NO role in label assignment.
+They are used ONLY as ML training features.
+
+WHY SEPARATE LABELING FROM ML FEATURES
+----------------------------------------
+If switch metrics were used for labeling, a trivial if-else rule
+(e.g. `if dropped_delta > 0: label=CONGESTED`) would be sufficient
+— no ML required. By labeling from host-observed congestion effects
+and training the ML model on switch metrics, we learn the mapping:
+
+    switch observables  →  host-experienced congestion state
+
+This is the realistic production scenario: an SDN controller has
+native OpenFlow access to switch statistics but cannot instrument
+every end-host at runtime.
+
+Topology parameters (from mytopo.py)
+-------------------------------------
+LINK_BW_MBPS      = 25.0 Mbps
+LINK_DELAY_MS     = 30.0 ms  (one-way per link)
+MAX_QUEUE_PKTS    = 30 packets
+MTU_BYTES         = 1500 bytes
+
+Derived constants
+-----------------
+PKT_TX_MS           = (MTU × 8) / (BW × 10⁶) × 10³
+                    = (1500 × 8) / (25.0 × 10⁶) × 10³
+                    = 0.4800 ms
+
+BASELINE_RTT_MS     = 4 × LINK_DELAY_MS  (h1→s1→h2→s1→h1)
+                    = 4 × 30
+                    = 120 ms
+
+Baseline RTT used in labeling
+------------------------------
+Value  : 119.73 ms
+Source : ss min_rtt — 5th-percentile of measured minimum RTT
+
+ss host data available: True
+
+HF-CEF Threshold Derivations
+=============================
+
+T_RTT_RATIO  =  1.0920  (Group B onset threshold)
+
+    Source: M/D/1 queueing theory.
+    For Poisson arrivals and deterministic service:
+        Lq = rho^2 / (2 * (1 - rho))
+    The curve bends sharply (the "knee") at rho = 0.75:
+        rho=0.50 → Lq=0.50 pkts  (quiet)
+        rho=0.75 → Lq=1.12 pkts  (onset — THRESHOLD)
+        rho=0.90 → Lq=4.05 pkts  (heavily congested)
+    At rho=0.75: 75% of 30 pkts = 23 packets in queue.
+    One-way queuing delay: 23 × 0.4800 ms = 11.0400 ms
+    RTT_onset = 120 + 11.0400 = 131.0400 ms
+    T_RTT_RATIO = RTT_onset / baseline = 1.0920
+
+    This threshold fires when host-observed RTT elevation is
+    consistent with the queue entering its superlinear growth
+    regime. It is derived entirely from topology parameters —
+    no tuning, no manual selection.
+
+T_RTT_RATIO_STRICT  =  1.1040  (fallback when ss absent)
+
+    Used only when ss data is unavailable. The extra 3 packets
+    of margin (12.48ms additional queue delay) compensates for
+    the reduced confidence of single-source (iperf-only) loss
+    detection.
+
+T_RTTVAR_US  =  5000 µs  [5 ms]  (Group B jitter threshold)
+
+    Source: Queuing delay variance analysis.
+    In an uncongested 30.0-ms path, RTT variance originates from
+    OS timer resolution (~1–2 ms on Linux kernels).
+    At 50% queue fill (15 packets), packets see a randomly
+    occupied queue; queuing delay variance:
+        sigma_one_way = (N_pkts × PKT_TX_MS) / (2 × sqrt(3))
+        = (15 × 0.4800) / (2 × 1.732)
+        = 2.08 ms one-way
+    RTT rttvar contribution ≈ 4.16 ms
+    T_RTTVAR = 5 ms sits between OS baseline (~2ms) and
+    significant queuing at 50% fill (>4.2ms),
+    making it a sensitive LEADING INDICATOR of queue oscillation
+    that fires before mean RTT crosses T_RTT_RATIO.
+
+T_BW_RATIO  =  0.80  (Group C throughput floor)
+
+    Source: TCP AIMD steady-state analysis (Mathis et al., 1997).
+    TCP throughput formula:
+        B ≈ MSS / (RTT × sqrt(loss_rate))
+    Under periodic loss (AIMD congestion avoidance):
+      - On loss detection: TCP Reno halves cwnd → throughput
+        drops to ~50–75% of target immediately.
+      - Over the next AIMD cycle: throughput recovers toward
+        the target, averaging 70–80% across the cycle.
+      - RFC 3148 defines throughput < 80% of capacity as
+        "degraded" under normal TCP operation.
+    T_BW_RATIO = 0.80 captures the regime where AIMD-induced
+    reduction is ongoing. Transient TCP slow-start (< 2s) is
+    excluded by requiring the signal to co-occur with Group B
+    latency evidence.
+
+Label Assignment Rules
+-----------------------
+CONGESTED (2):  hf_A_loss = True
+                → Confirmed TCP packet loss at the host level.
+                The network has physically dropped packets;
+                TCP detected this via RTO expiry or SACK.
+                Binary event — most objective congestion signal.
+
+ONSET (1):      hf_A_loss = False
+                AND hf_B_latency = True   [RTT above M/D/1 onset]
+                AND hf_C_throughput = True [BW or jitter degraded]
+                → Queue is building; hosts see RTT inflation
+                AND throughput degradation, but no loss yet.
+                Two-layer requirement eliminates:
+                  - Transient RTT spikes (no BW impact)
+                  - Momentary BW dips during slow-start (no RTT)
+                Onset enables PROACTIVE SDN response before drops.
+
+NORMAL (0):     Neither of the above.
+
+Binary label:   NORMAL=0,  ONSET+CONGESTED=1
+
+Dataset statistics
+------------------
+Total time bins  : 200
+Unlabeled (-1)   : 0  (0.0%)  [no active flow/ping — excluded from ML training]
+Normal    (0)    : 82  (41.0%)
+Onset     (1)    : 74  (37.0%)
+Congested (2)    : 44  (22.0%)
+
+Achieved-ratio fix
+------------------
+hf_C_bw_iperf uses iperf_achieved_ratio_capped:
+  capped_target = min(sum_of_flow_targets, link_bw=25.0Mbps)
+  ratio_capped  = total_achieved_mbps / capped_target
+This prevents over-subscription (flows requesting > link capacity)
+from generating false-positive ONSET labels.
