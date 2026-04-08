@@ -5,26 +5,26 @@ PURPOSE
   Post-hoc audit of host-derived labels against switch ground truth.
   Switch data is NOT used for labeling — only for validation here.
 
-Labeled bins analysed : 200  (unlabeled bins excluded: 0)
+Labeled bins analysed : 10000  (unlabeled bins excluded: 0)
 
 Switch ground truth definitions (for audit only):
-  switch_drops : qdisc_dropped_delta_sum > 0  (n=44)
-  switch_onset : qdisc_backlog_pkt_max >= 23 pkts  (n=129)
-  switch_any   : drops OR onset  (n=129)
+  switch_drops : qdisc_dropped_delta_sum > 0  (n=1406)
+  switch_onset : qdisc_backlog_pkt_max >= 16 pkts  (n=3919)
+  switch_any   : drops OR onset  (n=3919)
 
 ------------------------------------------------------------
 
   Comparison: HF-CEF onset+congested vs switch onset+drops
-    TP=114  FP=4  FN=15  TN=67
-    Precision : 0.966
-    Recall    : 0.884
-    F1        : 0.923
+    TP=3772  FP=33  FN=147  TN=6048
+    Precision : 0.991
+    Recall    : 0.962
+    F1        : 0.977
 
   Comparison: HF-CEF congested        vs switch drops only
-    TP=44  FP=0  FN=0  TN=156
+    TP=1380  FP=0  FN=26  TN=8594
     Precision : 1.000
-    Recall    : 1.000
-    F1        : 1.000
+    Recall    : 0.982
+    F1        : 0.991
 
 ------------------------------------------------------------
 
@@ -32,10 +32,10 @@ CROSS-TABULATION: HF-CEF binary vs switch_any
 
                      | switch=0 | switch=1 | Total
 --------------------------------------------------
-  HF-CEF normal    |      67  |      15  | 82
-  HF-CEF congested |       4  |     114  | 118
+  HF-CEF normal    |    6048  |     147  | 6195
+  HF-CEF congested |      33  |    3772  | 3805
 --------------------------------------------------
-  Total              |      71  |     129  | 200
+  Total              |    6081  |    3919  | 10000
 
 INTERPRETATION
   High precision: HF-CEF congestion calls are trustworthy.

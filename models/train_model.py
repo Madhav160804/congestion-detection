@@ -508,8 +508,15 @@ def plot_feature_importance(best, feature_cols, X_te, y_te, out_dir=MODEL_DIR):
         axes[0].set_visible(False)
 
     try:
+        # Transform X_te to include only the selected features for permutation evaluation
+        selector = best.get("selector")
+        if selector is not None:
+             X_te_sel = selector.transform(X_te)
+        else:
+             X_te_sel = X_te
+
         perm = permutation_importance(
-            model, X_te, y_te,
+            model, X_te_sel, y_te,
             n_repeats=10, random_state=RANDOM_STATE, n_jobs=-1,
             scoring="f1_macro",
         )

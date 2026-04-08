@@ -28,7 +28,7 @@ PKT_TX_MS       = (MTU_BYTES * 8) / (LINK_BW_MBPS * 1e6) * 1e3   # 0.48 ms
 BASELINE_RTT_MS = 4.0 * LINK_DELAY_MS                             # 120 ms
 BASELINE_RTT_US = BASELINE_RTT_MS * 1000.0
 
-DURATION_S  = 200
+DURATION_S  = 10000
 UNIX_T0     = 1_700_000_000.0
 RANDOM_SEED = 42
 np.random.seed(RANDOM_SEED)
@@ -61,47 +61,38 @@ def rtt_from_queue(queue_pkts: float) -> float:
 
 def generate_flow_schedule() -> list:
     """
-    Poisson flow arrivals (mean IAT=12s) + deliberate burst windows.
-
-    Test window = last 20% = t=160-200.
-    Bursts are designed so t=160-175 is congested and t=175-200 is normal,
-    giving the test set approximately 37% congested / 63% normal.
-    Training phases:
-        t=0-25   : normal    (light random flows)
-        t=25-110 : congested (burst block 1 + Poisson arrivals)
-        t=110-135: normal    (recovery gap)
-        t=135-175: congested (burst block 2, ends at t=175)
-        t=175-200: normal    (recovery — cleanly in test window)
+    Scale-up scheduling for thousands of seconds.
+    Mixes continuous low-intensity background Poisson flows with
+    heavy, periodic overlapping 'burst blocks' every 200 seconds.
+    This guarantees both training AND test windows (last 20%) receive a 
+    perfectly balanced mix of truly congested and purely normal recovery phases.
     """
     flows = []
     fid = 0
     t = 0.0
+    
+    # Background Traffic: continuous light Poisson flows
     while t < DURATION_S - 10:
-        t += np.random.exponential(12)
+        t += np.random.exponential(5)
         if t >= DURATION_S:
             break
-        dur = float(np.clip(np.random.exponential(35), 5, 60))
-        tgt = float(np.random.uniform(4, 16))
+        dur = float(np.clip(np.random.exponential(20), 5, 40))
+        tgt = float(np.random.uniform(2, 6)) # low bandwidth
         flows.append((fid, t, dur, tgt))
         fid += 1
 
-    # Burst block 1: t=25-100 (creates onset/congested in training)
-    burst1 = [
-        (25, 75, 13.0),
-        (30, 70, 15.0),
-        (35, 65, 12.0),
-        (50, 55, 11.0),
-    ]
-    # Burst block 2: t=135-175 (creates congestion in late training + early test)
-    # *** All end by t=175 so t=175-200 is recovery (normal) in test window ***
-    burst2 = [
-        (135, 40, 14.0),
-        (140, 35, 16.0),
-        (145, 30, 12.0),
-    ]
-    for start, dur, tgt in burst1 + burst2:
-        flows.append((fid, start, dur, tgt))
-        fid += 1
+    # Burst Blocks: Periodic congestion every ~200 seconds
+    # Leaves plenty of time for queues to drain back to normal between bursts
+    burst_intervals = range(30, DURATION_S - 50, 200)
+    for start_t in burst_intervals:
+        # Create 3-5 heavy overlapping flows
+        num_heavy = np.random.randint(3, 6)
+        for i in range(num_heavy):
+            offset = np.random.uniform(0, 10)
+            dur = np.random.uniform(30, 80)
+            tgt = np.random.uniform(8, 16) # high bandwidth
+            flows.append((fid, start_t + offset, dur, tgt))
+            fid += 1
 
     flows.sort(key=lambda x: x[1])
     return flows
