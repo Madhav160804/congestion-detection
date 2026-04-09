@@ -575,13 +575,20 @@ def plot_roc_curves(results, y_te, out_dir=MODEL_DIR):
     print(f"  ROC curve plot         → {path}")
 
 
-def plot_predictions_timeline(df, best, X_scaled, y, out_dir=MODEL_DIR):
+def plot_predictions_timeline(df, best, X_scaled, y, out_dir=MODEL_DIR, window=None, suffix=""):
     """
     Compare model predictions against host-derived ground truth labels.
     Also overlays the key switch features the model used, providing a
     visual proof that switch metrics alone can predict host-experienced
     congestion.
     """
+    if window is not None:
+        start_bin, end_bin = window
+        mask = (df["time_bin"] >= start_bin) & (df["time_bin"] <= end_bin)
+        df = df[mask].copy()
+        X_scaled = X_scaled[mask].copy() if isinstance(X_scaled, pd.DataFrame) else X_scaled[mask]
+        y = y[mask]
+        
     fig = plt.figure(figsize=(16, 12))
     gs  = gridspec.GridSpec(4, 1, hspace=0.5)
     t   = df["time_bin"].values
@@ -597,7 +604,8 @@ def plot_predictions_timeline(df, best, X_scaled, y, out_dir=MODEL_DIR):
                   linewidth=1, alpha=0.7, label="util_pct_max (%)")
     ax1.set_ylabel("Backlog (pkts)", color="steelblue")
     ax1b.set_ylabel("Utilization (%)", color="darkorange")
-    ax1.set_title("Switch Metrics (ML input) — Backlog and Link Utilization")
+    title_suffix = f" (Zoomed {window[0]}s - {window[1]}s)" if window else ""
+    ax1.set_title(f"Switch Metrics (ML input) — Backlog and Link Utilization{title_suffix}")
     lines1, lab1 = ax1.get_legend_handles_labels()
     lines2, lab2 = ax1b.get_legend_handles_labels()
     ax1.legend(lines1 + lines2, lab1 + lab2, fontsize=8, loc="upper right")
@@ -625,8 +633,8 @@ def plot_predictions_timeline(df, best, X_scaled, y, out_dir=MODEL_DIR):
     colours = {0: "royalblue", 1: "orange", 2: "crimson"}
     for state, name in [(0, "normal"), (1, "onset"), (2, "congested")]:
         if "congestion_state" in df.columns:
-            mask = df["congestion_state"].values == state
-            ax3.fill_between(t, mask.astype(float), where=mask,
+            mask_state = df["congestion_state"].values == state
+            ax3.fill_between(t, mask_state.astype(float), where=mask_state,
                              color=colours[state], alpha=0.6,
                              label=f"{name} (host-derived)", step="mid")
     ax3.set_yticks([0, 1])
@@ -658,7 +666,8 @@ def plot_predictions_timeline(df, best, X_scaled, y, out_dir=MODEL_DIR):
         fontsize=11, fontweight="bold"
     )
     fig.tight_layout()
-    path = os.path.join(out_dir, "predictions_timeline.png")
+    filename = f"predictions_timeline{suffix}.png"
+    path = os.path.join(out_dir, filename)
     fig.savefig(path, dpi=120, bbox_inches="tight")
     plt.close(fig)
     print(f"  Timeline plot          → {path}")
@@ -750,6 +759,8 @@ def main():
     plot_confusion_matrix(best, y_te)
     plot_roc_curves(results, y_te)
     plot_predictions_timeline(df_eng, best, X_scaled, y)
+    plot_predictions_timeline(df_eng, best, X_scaled, y, window=(8400, 8600), suffix="_zoom_8400_8600")
+    plot_predictions_timeline(df_eng, best, X_scaled, y, window=(9000, 9300), suffix="_zoom_9000_9300")
 
     print("\n[Saving model and report]")
     save_model(best, scaler, feature_cols, results)
