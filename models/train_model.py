@@ -671,6 +671,45 @@ def plot_predictions_timeline(df, best, X_scaled_sel, y, out_dir=MODEL_DIR, wind
     plt.close(fig)
     print(f"  Timeline plot          → {path}")
 
+def plot_model_comparison(results, out_dir=MODEL_DIR):
+    names = [r["name"] for r in results]
+    f1s = [r["f1"] for r in results]
+    accs = [r["acc"] for r in results]
+    x = np.arange(len(names))
+    width = 0.35
+    fig, ax = plt.subplots(figsize=(10, 6))
+    ax.bar(x - width/2, f1s, width, label='Test F1-Macro', color='steelblue')
+    ax.bar(x + width/2, accs, width, label='Test Accuracy', color='darkorange')
+    ax.set_ylabel('Score')
+    ax.set_title('Final Model Performance Comparison (Top 15 Sparse Features)')
+    ax.set_xticks(x)
+    ax.set_xticklabels(names, rotation=30)
+    ax.set_ylim([0.9, 1.0])
+    ax.legend(loc="lower right")
+    ax.grid(axis='y', alpha=0.3)
+    fig.tight_layout()
+    path = os.path.join(out_dir, "model_comparison.png")
+    fig.savefig(path, dpi=120)
+    plt.close(fig)
+    print(f"  Model comparison plot  → {path}")
+
+def plot_fs_comparison(fs_results, out_dir=MODEL_DIR):
+    names = list(fs_results.keys())
+    scores = list(fs_results.values())
+    fig, ax = plt.subplots(figsize=(8, 5))
+    ax.bar(names, scores, color='mediumseagreen', width=0.5)
+    ax.set_ylabel('Proxy CV F1-Macro')
+    ax.set_title('Feature Extraction Performance (Target = 15 features)')
+    ax.set_ylim([0.95, 1.0])
+    ax.set_xticks(range(len(names)))
+    ax.set_xticklabels(names, rotation=15)
+    ax.grid(axis='y', alpha=0.3)
+    fig.tight_layout()
+    path = os.path.join(out_dir, "fs_comparison.png")
+    fig.savefig(path, dpi=120)
+    plt.close(fig)
+    print(f"  FS comparison plot     → {path}")
+
 
 # ============================================================================
 # 7.  SAVE MODEL & REPORT
@@ -750,6 +789,8 @@ def main():
     best_X_te_sel = None
     best_fs_features = []
     
+    fs_results = {}
+    
     # We use a fast LogisticRegression proxy to score features
     proxy_model = LogisticRegression(max_iter=1000, random_state=RANDOM_STATE)
     
@@ -759,6 +800,7 @@ def main():
             X_tr_tmp = selector.fit_transform(X_tr, y_tr)
             cv_f1 = cross_val_score(proxy_model, X_tr_tmp, y_tr, cv=3, scoring="f1_macro", n_jobs=-1).mean()
             print(f"    Selected size: {X_tr_tmp.shape[1]} | CV Proxy F1: {cv_f1:.4f}")
+            fs_results[fs_name] = cv_f1
             
             if cv_f1 > best_fs_score:
                 best_fs_score = cv_f1
@@ -791,6 +833,8 @@ def main():
     plot_feature_importance(best, best["sel_features"], best_X_te_sel, y_te)
     plot_confusion_matrix(best, y_te)
     plot_roc_curves(results, y_te)
+    plot_model_comparison(results)
+    plot_fs_comparison(fs_results)
     plot_predictions_timeline(df_eng, best, X_scaled_full_sel, y)
     plot_predictions_timeline(df_eng, best, X_scaled_full_sel, y, window=(8400, 8600), suffix="_zoom_8400_8600")
     plot_predictions_timeline(df_eng, best, X_scaled_full_sel, y, window=(9000, 9300), suffix="_zoom_9000_9300")
