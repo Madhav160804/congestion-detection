@@ -5,44 +5,68 @@ Feature source   : switch qdisc metrics ONLY
 Label source     : host/flow signals (iperf3, ping, ss)
 Label method     : HF-CEF (Host-Flow Congestion Evidence Framework)
 
-Switch features  : 137
+Switch features  : 15
 
 Methodology improvements applied:
   - Feature selection (reduced from 137 to 40 features to prevent overfitting)
   - Threshold optimization via Precision-Recall curve on training CV
   - 3-class detection breakdown for analyzing early onset catching
 
-Model: RandomForest
-  Selected features    : 40
-  Optimal Threshold    : 0.442
-  CV  F1-macro (train) : 0.9810
-  Test accuracy        : 0.9805
-  Test F1-macro        : 0.9795
-  Test ROC-AUC         : 0.9921
+Model: LogisticRegression
+  Selected features    : 15
+  Optimal Threshold    : 0.376
+  CV  F1-macro (train) : 0.9813
+  Test accuracy        : 0.9820
+  Test F1-macro        : 0.9811
+  Test ROC-AUC         : 0.9936
 
               precision    recall  f1-score   support
 
-      normal       1.00      0.97      0.98      1235
-   congested       0.96      0.99      0.98       765
+      normal       1.00      0.97      0.99      1235
+   congested       0.96      1.00      0.98       765
 
     accuracy                           0.98      2000
    macro avg       0.98      0.98      0.98      2000
 weighted avg       0.98      0.98      0.98      2000
 
     3-Class Breakdown (Test Set):
-      Normal    (n=1235): 1200 predicted normal, 35 predicted congested
-      Onset     (n=482): 4 predicted normal, 478 predicted congested
+      Normal    (n=1235): 1202 predicted normal, 33 predicted congested
+      Onset     (n=482): 3 predicted normal, 479 predicted congested
       Congested (n=283): 0 predicted normal, 283 predicted congested
 
 ────────────────────────────────────────
 
-Model: GradientBoosting
-  Selected features    : 40
-  Optimal Threshold    : 0.376
-  CV  F1-macro (train) : 0.9804
+Model: SVC
+  Selected features    : 15
+  Optimal Threshold    : 0.316
+  CV  F1-macro (train) : 0.9813
+  Test accuracy        : 0.9830
+  Test F1-macro        : 0.9821
+  Test ROC-AUC         : 0.9904
+
+              precision    recall  f1-score   support
+
+      normal       1.00      0.97      0.99      1235
+   congested       0.96      1.00      0.98       765
+
+    accuracy                           0.98      2000
+   macro avg       0.98      0.99      0.98      2000
+weighted avg       0.98      0.98      0.98      2000
+
+    3-Class Breakdown (Test Set):
+      Normal    (n=1235): 1204 predicted normal, 31 predicted congested
+      Onset     (n=482): 3 predicted normal, 479 predicted congested
+      Congested (n=283): 0 predicted normal, 283 predicted congested
+
+────────────────────────────────────────
+
+Model: MLP_NeuralNet
+  Selected features    : 15
+  Optimal Threshold    : 0.466
+  CV  F1-macro (train) : 0.9792
   Test accuracy        : 0.9795
   Test F1-macro        : 0.9785
-  Test ROC-AUC         : 0.9916
+  Test ROC-AUC         : 0.9918
 
               precision    recall  f1-score   support
 
@@ -60,28 +84,76 @@ weighted avg       0.98      0.98      0.98      2000
 
 ────────────────────────────────────────
 
-Model: XGBoost
-  Selected features    : 40
-  Optimal Threshold    : 0.381
-  CV  F1-macro (train) : 0.9812
-  Test accuracy        : 0.9815
-  Test F1-macro        : 0.9806
-  Test ROC-AUC         : 0.9919
+Model: RandomForest
+  Selected features    : 15
+  Optimal Threshold    : 0.520
+  CV  F1-macro (train) : 0.9813
+  Test accuracy        : 0.9830
+  Test F1-macro        : 0.9821
+  Test ROC-AUC         : 0.9938
+
+              precision    recall  f1-score   support
+
+      normal       1.00      0.98      0.99      1235
+   congested       0.96      0.99      0.98       765
+
+    accuracy                           0.98      2000
+   macro avg       0.98      0.99      0.98      2000
+weighted avg       0.98      0.98      0.98      2000
+
+    3-Class Breakdown (Test Set):
+      Normal    (n=1235): 1205 predicted normal, 30 predicted congested
+      Onset     (n=482): 4 predicted normal, 478 predicted congested
+      Congested (n=283): 0 predicted normal, 283 predicted congested
+
+────────────────────────────────────────
+
+Model: GradientBoosting
+  Selected features    : 15
+  Optimal Threshold    : 0.376
+  CV  F1-macro (train) : 0.9801
+  Test accuracy        : 0.9810
+  Test F1-macro        : 0.9800
+  Test ROC-AUC         : 0.9931
 
               precision    recall  f1-score   support
 
       normal       1.00      0.97      0.98      1235
-   congested       0.96      1.00      0.98       765
+   congested       0.96      0.99      0.98       765
 
     accuracy                           0.98      2000
    macro avg       0.98      0.98      0.98      2000
 weighted avg       0.98      0.98      0.98      2000
 
     3-Class Breakdown (Test Set):
-      Normal    (n=1235): 1201 predicted normal, 34 predicted congested
-      Onset     (n=482): 3 predicted normal, 479 predicted congested
+      Normal    (n=1235): 1202 predicted normal, 33 predicted congested
+      Onset     (n=482): 5 predicted normal, 477 predicted congested
       Congested (n=283): 0 predicted normal, 283 predicted congested
 
 ────────────────────────────────────────
 
-Best model: XGBoost
+Model: XGBoost
+  Selected features    : 15
+  Optimal Threshold    : 0.456
+  CV  F1-macro (train) : 0.9812
+  Test accuracy        : 0.9810
+  Test F1-macro        : 0.9800
+  Test ROC-AUC         : 0.9929
+
+              precision    recall  f1-score   support
+
+      normal       1.00      0.97      0.98      1235
+   congested       0.96      0.99      0.98       765
+
+    accuracy                           0.98      2000
+   macro avg       0.98      0.98      0.98      2000
+weighted avg       0.98      0.98      0.98      2000
+
+    3-Class Breakdown (Test Set):
+      Normal    (n=1235): 1202 predicted normal, 33 predicted congested
+      Onset     (n=482): 5 predicted normal, 477 predicted congested
+      Congested (n=283): 0 predicted normal, 283 predicted congested
+
+────────────────────────────────────────
+
+Best model: SVC

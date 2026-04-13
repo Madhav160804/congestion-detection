@@ -123,6 +123,10 @@ from sklearn.metrics import (
     confusion_matrix, roc_curve, ConfusionMatrixDisplay, precision_recall_curve
 )
 from sklearn.model_selection import StratifiedKFold, cross_val_score, cross_val_predict
+from sklearn.linear_model import LogisticRegression
+from sklearn.svm import SVC
+from sklearn.neural_network import MLPClassifier
+from sklearn.feature_selection import SelectFromModel, SelectKBest, mutual_info_classif, RFE
 
 warnings.filterwarnings("ignore")
 
@@ -365,8 +369,22 @@ def time_split(df, X, y):
 # 4.  MODEL DEFINITIONS
 # ============================================================================
 
+def get_feature_selectors():
+    rf = RandomForestClassifier(n_estimators=100, random_state=RANDOM_STATE, n_jobs=-1)
+    lr_lasso = LogisticRegression(penalty='l1', solver='liblinear', random_state=RANDOM_STATE)
+    
+    return {
+        "Mutual_Information": SelectKBest(mutual_info_classif, k=15),
+        "Lasso_L1": SelectFromModel(lr_lasso, max_features=15, threshold=-np.inf),
+        "RandomForest_MDI": SelectFromModel(rf, max_features=15, threshold=-np.inf),
+        "RFE_RandomForest": RFE(estimator=rf, n_features_to_select=15, step=10)
+    }
+
 def get_models():
     models = {
+        "LogisticRegression": LogisticRegression(max_iter=1000, random_state=RANDOM_STATE),
+        "SVC": SVC(probability=True, random_state=RANDOM_STATE),
+        "MLP_NeuralNet": MLPClassifier(hidden_layer_sizes=(64, 32), max_iter=500, random_state=RANDOM_STATE),
         "RandomForest": RandomForestClassifier(
             n_estimators=300,
             max_features="sqrt",
@@ -406,20 +424,10 @@ def get_models():
 # 5.  TRAINING & EVALUATION
 # ============================================================================
 
-def evaluate_model(name, model, X_tr, X_te, y_tr, y_te, feature_cols, state_te):
+def evaluate_model(name, model, X_tr_sel, X_te_sel, y_tr, y_te, sel_features, state_te):
     print(f"\n  [{name}]")
     
-    # 1. Feature Selection (prevent overfitting)
-    # Use a Random Forest to select the top 40 features
-    rf_selector = RandomForestClassifier(n_estimators=100, random_state=RANDOM_STATE, n_jobs=-1)
-    selector = SelectFromModel(rf_selector, max_features=40, threshold=-np.inf)
-    X_tr_sel = selector.fit_transform(X_tr, y_tr)
-    X_te_sel = selector.transform(X_te)
-    sel_mask = selector.get_support()
-    sel_features = [feature_cols[i] for i, m in enumerate(sel_mask) if m]
-    print(f"    Selected {len(sel_features)}/{len(feature_cols)} features")
-
-    # 2. Threshold Optimization via CV and PR curve
+    # Threshold Optimization via CV and PR curve
     if hasattr(model, "predict_proba"):
         cv_probs = cross_val_predict(model, X_tr_sel, y_tr, cv=5, method='predict_proba', n_jobs=-1)[:, 1]
         precs, recs, threshs = precision_recall_curve(y_tr, cv_probs)
@@ -465,17 +473,16 @@ def evaluate_model(name, model, X_tr, X_te, y_tr, y_te, feature_cols, state_te):
     print(f"\n{breakdown_str}")
 
     return {
-        "name": name, "model": model, "selector": selector, "sel_features": sel_features,
+        "name": name, "model": model, "sel_features": sel_features,
         "best_thresh": best_thresh, "acc": acc, "f1": f1, "auc": auc, "cv_f1": cv_f1.mean(),
         "y_pred": y_pred, "y_prob": y_prob, "report": rep, "breakdown_str": breakdown_str,
     }
 
-
-def train_all_models(models, X_tr, X_te, y_tr, y_te, feature_cols, state_te):
+def train_all_models(models, X_tr_sel, X_te_sel, y_tr, y_te, sel_features, state_te):
     results = []
     for name, model in models.items():
         try:
-            r = evaluate_model(name, model, X_tr, X_te, y_tr, y_te, feature_cols, state_te)
+            r = evaluate_model(name, model, X_tr_sel, X_te_sel, y_tr, y_te, sel_features, state_te)
             results.append(r)
         except Exception as e:
             print(f"  [{name}] FAILED: {e}")
@@ -508,15 +515,8 @@ def plot_feature_importance(best, feature_cols, X_te, y_te, out_dir=MODEL_DIR):
         axes[0].set_visible(False)
 
     try:
-        # Transform X_te to include only the selected features for permutation evaluation
-        selector = best.get("selector")
-        if selector is not None:
-             X_te_sel = selector.transform(X_te)
-        else:
-             X_te_sel = X_te
-
         perm = permutation_importance(
-            model, X_te_sel, y_te,
+            model, X_te, y_te,
             n_repeats=10, random_state=RANDOM_STATE, n_jobs=-1,
             scoring="f1_macro",
         )
@@ -575,7 +575,7 @@ def plot_roc_curves(results, y_te, out_dir=MODEL_DIR):
     print(f"  ROC curve plot         → {path}")
 
 
-def plot_predictions_timeline(df, best, X_scaled, y, out_dir=MODEL_DIR, window=None, suffix=""):
+def plot_predictions_timeline(df, best, X_scaled_sel, y, out_dir=MODEL_DIR, window=None, suffix=""):
     """
     Compare model predictions against host-derived ground truth labels.
     Also overlays the key switch features the model used, providing a
@@ -586,7 +586,7 @@ def plot_predictions_timeline(df, best, X_scaled, y, out_dir=MODEL_DIR, window=N
         start_bin, end_bin = window
         mask = (df["time_bin"] >= start_bin) & (df["time_bin"] <= end_bin)
         df = df[mask].copy()
-        X_scaled = X_scaled[mask].copy() if isinstance(X_scaled, pd.DataFrame) else X_scaled[mask]
+        X_scaled_sel = X_scaled_sel[mask].copy() if isinstance(X_scaled_sel, pd.DataFrame) else X_scaled_sel[mask]
         y = y[mask]
         
     fig = plt.figure(figsize=(16, 12))
@@ -645,8 +645,7 @@ def plot_predictions_timeline(df, best, X_scaled, y, out_dir=MODEL_DIR, window=N
 
     # Panel 4 — Model predictions (from switch features only)
     ax4 = fig.add_subplot(gs[3])
-    # To predict full series for visual, use the best model's pipeline
-    X_scaled_sel = best["selector"].transform(X_scaled.values)
+    # Predict full series output
     full_prob = best["model"].predict_proba(X_scaled_sel)[:, 1] if hasattr(best["model"], "predict_proba") else None
     full_pred = (full_prob >= best["best_thresh"]).astype(int) if full_prob is not None else best["model"].predict(X_scaled_sel)
     
@@ -743,9 +742,40 @@ def main():
     print("\n[Time-aware train/test split]")
     X_tr, X_te, y_tr, y_te, state_tr, state_te = time_split(df_eng, X_scaled, y)
 
-    print("\n[Training models]")
+    print("\n[Exploring Feature Selection (Target=15 features)]")
+    selectors = get_feature_selectors()
+    best_fs_name = None
+    best_fs_score = -1
+    best_X_tr_sel = None
+    best_X_te_sel = None
+    best_fs_features = []
+    
+    # We use a fast LogisticRegression proxy to score features
+    proxy_model = LogisticRegression(max_iter=1000, random_state=RANDOM_STATE)
+    
+    for fs_name, selector in selectors.items():
+        print(f"  Evaluating {fs_name}...")
+        try:
+            X_tr_tmp = selector.fit_transform(X_tr, y_tr)
+            cv_f1 = cross_val_score(proxy_model, X_tr_tmp, y_tr, cv=3, scoring="f1_macro", n_jobs=-1).mean()
+            print(f"    Selected size: {X_tr_tmp.shape[1]} | CV Proxy F1: {cv_f1:.4f}")
+            
+            if cv_f1 > best_fs_score:
+                best_fs_score = cv_f1
+                best_fs_name = fs_name
+                best_X_tr_sel = X_tr_tmp
+                best_X_te_sel = selector.transform(X_te)
+                mask = selector.get_support()
+                best_fs_features = [feature_cols[i] for i, m in enumerate(mask) if m]
+        except Exception as e:
+            print(f"    Failed: {e}")
+
+    print(f"\n  Winner: {best_fs_name} (Proxy CV F1 = {best_fs_score:.4f})")
+    print(f"  Keeping exact {len(best_fs_features)} / {len(feature_cols)} optimized features.")
+
+    print("\n[Training models on Optimal Feature Set]")
     models  = get_models()
-    results = train_all_models(models, X_tr, X_te, y_tr, y_te, feature_cols, state_te)
+    results = train_all_models(models, best_X_tr_sel, best_X_te_sel, y_tr, y_te, best_fs_features, state_te)
 
     if not results:
         print("ERROR: No model trained successfully.")
@@ -754,16 +784,19 @@ def main():
     best = pick_best(results)
 
     print("\n[Generating plots]")
-    # Feature importance uses the post-selection mask
-    plot_feature_importance(best, best["sel_features"], X_te, y_te)
+    # Generate full selected dataset for prediction timelines
+    X_scaled_full_sel = selectors[best_fs_name].transform(X_scaled)
+    
+    # Feature importance uses the post-selection test data
+    plot_feature_importance(best, best["sel_features"], best_X_te_sel, y_te)
     plot_confusion_matrix(best, y_te)
     plot_roc_curves(results, y_te)
-    plot_predictions_timeline(df_eng, best, X_scaled, y)
-    plot_predictions_timeline(df_eng, best, X_scaled, y, window=(8400, 8600), suffix="_zoom_8400_8600")
-    plot_predictions_timeline(df_eng, best, X_scaled, y, window=(9000, 9300), suffix="_zoom_9000_9300")
+    plot_predictions_timeline(df_eng, best, X_scaled_full_sel, y)
+    plot_predictions_timeline(df_eng, best, X_scaled_full_sel, y, window=(8400, 8600), suffix="_zoom_8400_8600")
+    plot_predictions_timeline(df_eng, best, X_scaled_full_sel, y, window=(9000, 9300), suffix="_zoom_9000_9300")
 
     print("\n[Saving model and report]")
-    save_model(best, scaler, feature_cols, results)
+    save_model(best, scaler, best_fs_features, results)
 
     print("\n[Done]")
     print(f"  Best: {best['name']}  "
