@@ -18,3 +18,9 @@ env/
 
 # Temporary files
 tmp*
+
+raw_data/
+check_*.py
+test_*.py
+patch.py
+

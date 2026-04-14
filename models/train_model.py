@@ -353,14 +353,31 @@ def select_features(df):
 # ============================================================================
 
 def time_split(df, X, y):
-    """Split at 80th percentile of time — never random, to respect causality."""
-    n       = len(df)
-    cutoff  = int(n * TRAIN_RATIO)
-    split_t = df["time_bin"].iloc[cutoff]
-    print(f"  Train : first {cutoff} bins (t ≤ {split_t}s)")
-    print(f"  Test  : last  {n - cutoff} bins  (t > {split_t}s)")
+    """Split at 80th percentile of time, falling back to stratified if test set is degenerate."""
+    from sklearn.model_selection import StratifiedShuffleSplit
+    n      = len(df)
+    cutoff = int(n * TRAIN_RATIO)
 
-    mask = np.arange(n) < cutoff
+    # Check if temporal test set has enough congestion (>=5% of its bins)
+    test_congestion_rate = np.sum(y[cutoff:]) / max(1, n - cutoff)
+
+    if test_congestion_rate >= 0.05:
+        mask    = np.arange(n) < cutoff
+        split_t = df["time_bin"].iloc[cutoff]
+        print(f"  Temporal split at t<={split_t}s  (test congestion: {test_congestion_rate:.1%})")
+    else:
+        # The tail of the stitched timeline is a quiet drain-down period with almost no
+        # congestion — temporal split produces a degenerate test set. Fall back to
+        # StratifiedShuffleSplit which guarantees the test set mirrors overall class balance.
+        print(f"  Temporal split yields only {test_congestion_rate:.1%} congestion in test (<5%).")
+        print(f"  Falling back to StratifiedShuffleSplit (random_state=42).")
+        sss = StratifiedShuffleSplit(n_splits=1, test_size=0.2, random_state=42)
+        train_idx, _ = next(sss.split(X.values, y))
+        mask = np.zeros(n, dtype=bool)
+        mask[train_idx] = True
+        actual_rate = np.sum(y[~mask]) / max(1, (~mask).sum())
+        print(f"  Stratified: train={mask.sum()}  test={(~mask).sum()}  test_congestion={actual_rate:.1%}")
+
     states = df["congestion_state"].values
     return X.values[mask], X.values[~mask], y[mask], y[~mask], states[mask], states[~mask]
 
@@ -505,11 +522,19 @@ def plot_feature_importance(best, feature_cols, X_te, y_te, out_dir=MODEL_DIR):
 
     if hasattr(model, "feature_importances_"):
         imp = pd.Series(model.feature_importances_, index=feature_cols)
+        title = "MDI Feature Importance"
+    elif hasattr(model, "coef_"):
+        imp = pd.Series(np.abs(model.coef_[0]), index=feature_cols)
+        title = "Absolute Coefficient Magnitude"
+    else:
+        imp = None
+
+    if imp is not None:
         top = imp.nlargest(20).sort_values()
         axes[0].barh(top.index, top.values, color="steelblue")
-        axes[0].set_title(f"{best['name']} — MDI Feature Importance (top 20)\n"
+        axes[0].set_title(f"{best['name']} - {title} (top 20)\n"
                           f"[All features are switch qdisc metrics]")
-        axes[0].set_xlabel("Mean decrease in impurity")
+        axes[0].set_xlabel("Importance Weight")
         axes[0].grid(axis="x", alpha=0.3)
     else:
         axes[0].set_visible(False)
@@ -684,7 +709,10 @@ def plot_model_comparison(results, out_dir=MODEL_DIR):
     ax.set_title('Final Model Performance Comparison (Top 15 Sparse Features)')
     ax.set_xticks(x)
     ax.set_xticklabels(names, rotation=30)
-    ax.set_ylim([0.9, 1.0])
+    
+    min_val = min(min(f1s), min(accs))
+    ax.set_ylim([max(0.0, min_val - 0.05), 1.0])
+    
     ax.legend(loc="lower right")
     ax.grid(axis='y', alpha=0.3)
     fig.tight_layout()
@@ -700,7 +728,10 @@ def plot_fs_comparison(fs_results, out_dir=MODEL_DIR):
     ax.bar(names, scores, color='mediumseagreen', width=0.5)
     ax.set_ylabel('Proxy CV F1-Macro')
     ax.set_title('Feature Extraction Performance (Target = 15 features)')
-    ax.set_ylim([0.95, 1.0])
+    
+    if scores:
+        ax.set_ylim([max(0.0, min(scores) - 0.05), 1.0])
+        
     ax.set_xticks(range(len(names)))
     ax.set_xticklabels(names, rotation=15)
     ax.grid(axis='y', alpha=0.3)

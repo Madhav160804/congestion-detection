@@ -21,10 +21,14 @@ import csv
 import json
 import signal
 from mininet.net import Mininet
-from mininet.node import OVSKernelSwitch, Controller
+from mininet.node import OVSKernelSwitch, OVSController
 from mininet.link import TCLink
 from mininet.log import setLogLevel, info
 
+
+import sys
+import os
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'collectors'))
 
 import random
 import math
@@ -34,11 +38,11 @@ from collect_host_metrics   import start_host_monitor,   stop_host_monitor
 
 def generate_flow_schedule(
     stop_arrivals_at: float = 120.0,
-    mean_interarrival: float = 10.0,
-    bw_min: float = 10.0,
-    bw_max: float = 20.0,
-    dur_min: float = 30.0,
-    dur_max: float = 100.0,
+    mean_interarrival: float = 8.0,
+    bw_min: float = 1.0,
+    bw_max: float = 1.5,
+    dur_min: float = 60.0,
+    dur_max: float = 120.0,
     seed: int = None,
 ):
     """
@@ -81,7 +85,20 @@ def generate_flow_schedule(
 
 
 # ── Output directory ─────────────────────────────────────────────────────────
-RESULTS_DIR = "iperf_results"
+
+import argparse
+parser = argparse.ArgumentParser()
+parser.add_argument('--duration', type=int, default=200)
+parser.add_argument('--seed', type=int, default=42)
+parser.add_argument('--outdir', type=str, default='iperf_results')
+try:
+    args, _ = parser.parse_known_args()
+except:
+    class Args: duration=200; seed=42; outdir='iperf_results'
+    args = Args()
+
+RESULTS_DIR = args.outdir
+
 os.makedirs(RESULTS_DIR, exist_ok=True)
 
 
@@ -92,39 +109,48 @@ def build_topology():
     """Return a started Mininet: h1 -- s1 -- h2, both links at 10 Mbps."""
     net = Mininet(
         switch=OVSKernelSwitch,
-        controller=Controller,
         link=TCLink,
         autoSetMacs=True,
     )
 
-    info("*** Adding controller\n")
-    net.addController("c0")
+    # info("*** Adding controller\n")
+    # net.addController("c0")
 
     info("*** Adding hosts\n")
     h1 = net.addHost("h1", ip="10.0.0.1/24")
     h2 = net.addHost("h2", ip="10.0.0.2/24")
 
     info("*** Adding switch\n")
-    s1 = net.addSwitch("s1")
+    s1 = net.addSwitch("s1", failMode='standalone')
 
-    info("*** Adding links (bw=10 Mbps)\n")
+    info("*** Adding links (bw=5 Mbps, queue=10pkts)\n")
     # max_queue_size limits the qdisc buffer to ~20 packets.
     # Without this the default queue is hundreds of packets deep
     # (bufferbloat), so tc delays rather than drops — TCP never sees
     # a loss and retransmits stay at 0. A 20-packet limit at 10 Mbps
     # gives ~24 ms of buffering, tight enough to force real drops
     # and retransmissions when competing flows saturate the link.
-    net.addLink(h1, s1, delay="30ms", bw=25, max_queue_size=30)
-    net.addLink(s1, h2, delay="30ms", bw=25, max_queue_size=30)
+    net.addLink(h1, s1, delay="30ms", bw=5, max_queue_size=5)
+    net.addLink(s1, h2, delay="30ms", bw=5, max_queue_size=5)
 
-    #h1.cmd("sysctl -w net.ipv4.tcp_congestion_control=reno")
-    #h2.cmd("sysctl -w net.ipv4.tcp_congestion_control=reno")
-
-    #[ h1.cmd(f"ethtool -K {inf} tso off gso off") for inf in h1.intfNames() ]
-    #[ h2.cmd(f"ethtool -K {inf} tso off gso off") for inf in h2.intfNames() ]
-    #[ s1.cmd(f"ethrool -K {inf} tso off gso off") for inf in s1.intfNames() ]
     info("*** Starting network\n")
     net.start()
+
+    # Switch to TCP Reno — it reacts to loss more aggressively than Cubic,
+    # making it easier to generate visible retransmit events in short runs.
+    h1.cmd("sysctl -w net.ipv4.tcp_congestion_control=reno")
+    h2.cmd("sysctl -w net.ipv4.tcp_congestion_control=reno")
+
+    # Disable hardware offloading so the HTB shaper sees individual packets.
+    # Without this, TSO/GSO merges segments into huge 64KB+ chunks which
+    # bypass the queue length limit and prevent real drops in WSL2.
+    for intf in h1.intfNames():
+        h1.cmd(f"ethtool -K {intf} tso off gso off gro off 2>/dev/null || true")
+    for intf in h2.intfNames():
+        h2.cmd(f"ethtool -K {intf} tso off gso off gro off 2>/dev/null || true")
+    for intf in s1.intfNames():
+        s1.cmd(f"ethtool -K {intf} tso off gso off gro off 2>/dev/null || true")
+
     return net
 
 
@@ -135,13 +161,11 @@ def build_topology():
 # Flows are launched aggressively so that by t=30s the combined target
 # bandwidth already exceeds the 10 Mbps link, guaranteeing real queue
 # overflow, packet drops, and TCP retransmissions.
-FLOW_SCHEDULE = generate_flow_schedule()
+FLOW_SCHEDULE = generate_flow_schedule(seed=args.seed, stop_arrivals_at=args.duration-80)
 
 # (start_time_s, stop_time_s, ping_interval_s)
 PING_SCHEDULE = [
-    (0,   60,  1.0),   # 1 ping/s
-    (20,  120, 0.5),   # 2 pings/s
-    (60,  180, 0.2),   # 5 pings/s
+    (0,   args.duration,  1.0),   # 1 ping/s
 ]
 
 
@@ -170,7 +194,7 @@ def run_test(net):
 
     info("*** Test started – ramping traffic for 120 s, coasting to 180 s\n")
 
-    while elapsed() < 200:
+    while elapsed() < args.duration:
         t = elapsed()
 
         # ── launch iperf flows on schedule ────────────────────────────────
@@ -557,8 +581,8 @@ def main():
     try:
         info("*** Verifying connectivity\n")
         net.pingAll()
-        monitor      = start_switch_monitor(net.get('s1'), interval=1.0, link_bw_mbps=25.0)
-        host_monitor = start_host_monitor(net.get('h1'),  interval=1.0)
+        monitor      = start_switch_monitor(net.get('s1'), interval=1.0, link_bw_mbps=25.0, out_dir=RESULTS_DIR.replace('iperf_results', 'switch_results'))
+        host_monitor = start_host_monitor(net.get('h1'),  interval=1.0, out_dir=RESULTS_DIR.replace('iperf_results', 'host_results'))
         run_test(net)
         stop_switch_monitor(monitor)
         stop_host_monitor(host_monitor)

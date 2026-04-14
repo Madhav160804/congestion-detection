@@ -192,9 +192,9 @@ import matplotlib.gridspec as gridspec
 # SECTION 1 — TOPOLOGY CONSTANTS  (sourced from mytopo.py)
 # ════════════════════════════════════════════════════════════════════════════
 
-LINK_BW_MBPS   = 25.0
+LINK_BW_MBPS   = 5.0
 LINK_DELAY_MS  = 30.0
-MAX_QUEUE_PKTS = 30
+MAX_QUEUE_PKTS = 10
 MTU_BYTES      = 1500
 
 # ── Derived ─────────────────────────────────────────────────────────────────
@@ -534,9 +534,8 @@ def apply_hfcef(df, baseline_rtt_us, baseline_source):
             (df["hf_A_lost_host"] == 1)
         ).astype(int)
     else:
-        # Without ss: iperf retransmit + strong RTT inflation required
-        strict_rtt = (df["rtt_relative_iperf"] > T_RTT_RATIO_STRICT).astype(int)
-        df["hf_A_loss"] = ((df["hf_A_retx_iperf"] == 1) & (strict_rtt == 1)).astype(int)
+        # Without ss: iperf physical retransmissions definitively indicate queue loss
+        df["hf_A_loss"] = (df["hf_A_retx_iperf"] == 1).astype(int)
 
     # ── Group B — Latency Inflation Layer ────────────────────────────────
     # B1: iperf TCP RTT exceeds M/D/1 onset threshold.
@@ -948,7 +947,7 @@ def validate_labels(df, out_dir=OUT_DIR):
         f.write("  FN (low rec)  : drops during iperf-idle periods (unlabeled\n")
         f.write("                  bins already excluded from training).\n")
 
-    print(f"  label_validation_report.txt → {rpt_path}")
+    print(f"  label_validation_report.txt -> {rpt_path}")
     print(f"  Validation summary (HF-CEF congested vs switch drops):")
     r = rows[1]
     print(f"    Precision={r['precision']:.3f}  Recall={r['recall']:.3f}  "

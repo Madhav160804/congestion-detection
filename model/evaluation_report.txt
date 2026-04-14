@@ -14,146 +14,140 @@ Methodology improvements applied:
 
 Model: LogisticRegression
   Selected features    : 15
-  Optimal Threshold    : 0.376
-  CV  F1-macro (train) : 0.9813
-  Test accuracy        : 0.9820
-  Test F1-macro        : 0.9811
-  Test ROC-AUC         : 0.9936
+  Optimal Threshold    : 0.494
+  CV  F1-macro (train) : 0.9240
+  Test accuracy        : 0.9324
+  Test F1-macro        : 0.9304
+  Test ROC-AUC         : 0.9700
 
               precision    recall  f1-score   support
 
-      normal       1.00      0.97      0.99      1235
-   congested       0.96      1.00      0.98       765
+      normal       0.93      0.95      0.94      1210
+   congested       0.93      0.91      0.92       877
 
-    accuracy                           0.98      2000
-   macro avg       0.98      0.98      0.98      2000
-weighted avg       0.98      0.98      0.98      2000
+    accuracy                           0.93      2087
+   macro avg       0.93      0.93      0.93      2087
+weighted avg       0.93      0.93      0.93      2087
 
     3-Class Breakdown (Test Set):
-      Normal    (n=1235): 1202 predicted normal, 33 predicted congested
-      Onset     (n=482): 3 predicted normal, 479 predicted congested
-      Congested (n=283): 0 predicted normal, 283 predicted congested
+      Normal    (n=1210): 1150 predicted normal, 60 predicted congested
+      Congested (n=877): 81 predicted normal, 796 predicted congested
 
 ────────────────────────────────────────
 
 Model: SVC
   Selected features    : 15
-  Optimal Threshold    : 0.316
-  CV  F1-macro (train) : 0.9813
-  Test accuracy        : 0.9830
-  Test F1-macro        : 0.9821
-  Test ROC-AUC         : 0.9904
+  Optimal Threshold    : 0.539
+  CV  F1-macro (train) : 0.9261
+  Test accuracy        : 0.9324
+  Test F1-macro        : 0.9304
+  Test ROC-AUC         : 0.9529
 
               precision    recall  f1-score   support
 
-      normal       1.00      0.97      0.99      1235
-   congested       0.96      1.00      0.98       765
+      normal       0.93      0.95      0.94      1210
+   congested       0.93      0.91      0.92       877
 
-    accuracy                           0.98      2000
-   macro avg       0.98      0.99      0.98      2000
-weighted avg       0.98      0.98      0.98      2000
+    accuracy                           0.93      2087
+   macro avg       0.93      0.93      0.93      2087
+weighted avg       0.93      0.93      0.93      2087
 
     3-Class Breakdown (Test Set):
-      Normal    (n=1235): 1204 predicted normal, 31 predicted congested
-      Onset     (n=482): 3 predicted normal, 479 predicted congested
-      Congested (n=283): 0 predicted normal, 283 predicted congested
+      Normal    (n=1210): 1150 predicted normal, 60 predicted congested
+      Congested (n=877): 81 predicted normal, 796 predicted congested
 
 ────────────────────────────────────────
 
 Model: MLP_NeuralNet
   Selected features    : 15
-  Optimal Threshold    : 0.466
-  CV  F1-macro (train) : 0.9792
-  Test accuracy        : 0.9795
-  Test F1-macro        : 0.9785
-  Test ROC-AUC         : 0.9918
+  Optimal Threshold    : 0.495
+  CV  F1-macro (train) : 0.9340
+  Test accuracy        : 0.9444
+  Test F1-macro        : 0.9428
+  Test ROC-AUC         : 0.9743
 
               precision    recall  f1-score   support
 
-      normal       1.00      0.97      0.98      1235
-   congested       0.95      0.99      0.97       765
+      normal       0.94      0.96      0.95      1210
+   congested       0.94      0.92      0.93       877
 
-    accuracy                           0.98      2000
-   macro avg       0.98      0.98      0.98      2000
-weighted avg       0.98      0.98      0.98      2000
+    accuracy                           0.94      2087
+   macro avg       0.94      0.94      0.94      2087
+weighted avg       0.94      0.94      0.94      2087
 
     3-Class Breakdown (Test Set):
-      Normal    (n=1235): 1199 predicted normal, 36 predicted congested
-      Onset     (n=482): 5 predicted normal, 477 predicted congested
-      Congested (n=283): 0 predicted normal, 283 predicted congested
+      Normal    (n=1210): 1162 predicted normal, 48 predicted congested
+      Congested (n=877): 68 predicted normal, 809 predicted congested
 
 ────────────────────────────────────────
 
 Model: RandomForest
   Selected features    : 15
-  Optimal Threshold    : 0.520
-  CV  F1-macro (train) : 0.9813
-  Test accuracy        : 0.9830
-  Test F1-macro        : 0.9821
-  Test ROC-AUC         : 0.9938
+  Optimal Threshold    : 0.671
+  CV  F1-macro (train) : 0.9502
+  Test accuracy        : 0.9602
+  Test F1-macro        : 0.9587
+  Test ROC-AUC         : 0.9741
 
               precision    recall  f1-score   support
 
-      normal       1.00      0.98      0.99      1235
-   congested       0.96      0.99      0.98       765
+      normal       0.94      0.99      0.97      1210
+   congested       0.99      0.92      0.95       877
 
-    accuracy                           0.98      2000
-   macro avg       0.98      0.99      0.98      2000
-weighted avg       0.98      0.98      0.98      2000
+    accuracy                           0.96      2087
+   macro avg       0.97      0.95      0.96      2087
+weighted avg       0.96      0.96      0.96      2087
 
     3-Class Breakdown (Test Set):
-      Normal    (n=1235): 1205 predicted normal, 30 predicted congested
-      Onset     (n=482): 4 predicted normal, 478 predicted congested
-      Congested (n=283): 0 predicted normal, 283 predicted congested
+      Normal    (n=1210): 1200 predicted normal, 10 predicted congested
+      Congested (n=877): 73 predicted normal, 804 predicted congested
 
 ────────────────────────────────────────
 
 Model: GradientBoosting
   Selected features    : 15
-  Optimal Threshold    : 0.376
-  CV  F1-macro (train) : 0.9801
-  Test accuracy        : 0.9810
-  Test F1-macro        : 0.9800
-  Test ROC-AUC         : 0.9931
+  Optimal Threshold    : 0.827
+  CV  F1-macro (train) : 0.9522
+  Test accuracy        : 0.9502
+  Test F1-macro        : 0.9480
+  Test ROC-AUC         : 0.9782
 
               precision    recall  f1-score   support
 
-      normal       1.00      0.97      0.98      1235
-   congested       0.96      0.99      0.98       765
+      normal       0.92      1.00      0.96      1210
+   congested       0.99      0.89      0.94       877
 
-    accuracy                           0.98      2000
-   macro avg       0.98      0.98      0.98      2000
-weighted avg       0.98      0.98      0.98      2000
+    accuracy                           0.95      2087
+   macro avg       0.96      0.94      0.95      2087
+weighted avg       0.95      0.95      0.95      2087
 
     3-Class Breakdown (Test Set):
-      Normal    (n=1235): 1202 predicted normal, 33 predicted congested
-      Onset     (n=482): 5 predicted normal, 477 predicted congested
-      Congested (n=283): 0 predicted normal, 283 predicted congested
+      Normal    (n=1210): 1205 predicted normal, 5 predicted congested
+      Congested (n=877): 99 predicted normal, 778 predicted congested
 
 ────────────────────────────────────────
 
 Model: XGBoost
   Selected features    : 15
-  Optimal Threshold    : 0.456
-  CV  F1-macro (train) : 0.9812
-  Test accuracy        : 0.9810
-  Test F1-macro        : 0.9800
-  Test ROC-AUC         : 0.9929
+  Optimal Threshold    : 0.835
+  CV  F1-macro (train) : 0.9535
+  Test accuracy        : 0.9535
+  Test F1-macro        : 0.9516
+  Test ROC-AUC         : 0.9785
 
               precision    recall  f1-score   support
 
-      normal       1.00      0.97      0.98      1235
-   congested       0.96      0.99      0.98       765
+      normal       0.93      1.00      0.96      1210
+   congested       0.99      0.90      0.94       877
 
-    accuracy                           0.98      2000
-   macro avg       0.98      0.98      0.98      2000
-weighted avg       0.98      0.98      0.98      2000
+    accuracy                           0.95      2087
+   macro avg       0.96      0.95      0.95      2087
+weighted avg       0.96      0.95      0.95      2087
 
     3-Class Breakdown (Test Set):
-      Normal    (n=1235): 1202 predicted normal, 33 predicted congested
-      Onset     (n=482): 5 predicted normal, 477 predicted congested
-      Congested (n=283): 0 predicted normal, 283 predicted congested
+      Normal    (n=1210): 1204 predicted normal, 6 predicted congested
+      Congested (n=877): 91 predicted normal, 786 predicted congested
 
 ────────────────────────────────────────
 
-Best model: SVC
+Best model: RandomForest

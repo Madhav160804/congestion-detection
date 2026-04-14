@@ -244,10 +244,10 @@ FLOW_FIELDNAMES = [
 ]
 
 
-def _poll_loop(switch_name, interfaces, interval, link_bw_mbps, stop_event, t_start):
+def _poll_loop(switch_name, interfaces, interval, link_bw_mbps, stop_event, t_start, out_dir):
 
-    with open(QDISC_CSV, "w", newline="") as qf, \
-         open(FLOW_CSV,  "w", newline="") as ff:
+    with open(os.path.join(out_dir, 'qdisc_metrics.csv'), "w", newline="") as qf, \
+         open(os.path.join(out_dir, 'flow_metrics.csv'),  "w", newline="") as ff:
 
         qdisc_writer = csv.DictWriter(qf, fieldnames=QDISC_FIELDNAMES)
         flow_writer  = csv.DictWriter(ff, fieldnames=FLOW_FIELDNAMES)
@@ -310,7 +310,8 @@ def _poll_loop(switch_name, interfaces, interval, link_bw_mbps, stop_event, t_st
 # 6.  PUBLIC API
 # ---------------------------------------------------------------------------
 
-def start_switch_monitor(switch, interval=1.0, link_bw_mbps=10.0, t_start=None):
+def start_switch_monitor(switch, interval=1.0, link_bw_mbps=10.0, t_start=None, out_dir='switch_results'):
+    os.makedirs(out_dir, exist_ok=True)
     """
     Start a background thread that polls tc qdisc + OVS flow stats.
 
@@ -348,7 +349,7 @@ def start_switch_monitor(switch, interval=1.0, link_bw_mbps=10.0, t_start=None):
     stop_event = threading.Event()
     thread = threading.Thread(
         target=_poll_loop,
-        args=(name, interfaces, interval, link_bw_mbps, stop_event, t_start),
+        args=(name, interfaces, interval, link_bw_mbps, stop_event, t_start, out_dir),
         daemon=True,
     )
     thread.start()

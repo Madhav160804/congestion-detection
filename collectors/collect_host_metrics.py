@@ -205,8 +205,8 @@ def _aggregate_sockets(sockets, prev_totals):
     return row, new_prev
 
 
-def _poll_loop(host, interval, stop_event, t_start):
-    with open(HOST_CSV, "w", newline="") as f:
+def _poll_loop(host, interval, stop_event, t_start, out_dir):
+    with open(os.path.join(out_dir, 'tcp_socket_metrics.csv'), "w", newline="") as f:
         writer     = csv.DictWriter(f, fieldnames=HOST_CSV_FIELDS)
         writer.writeheader()
         prev_time  = None
@@ -237,7 +237,8 @@ def _poll_loop(host, interval, stop_event, t_start):
 
 # ── Public API ───────────────────────────────────────────────────────────────
 
-def start_host_monitor(host, interval=1.0, t_start=None):
+def start_host_monitor(host, interval=1.0, t_start=None, out_dir='host_results'):
+    os.makedirs(out_dir, exist_ok=True)
     """
     Start a background thread polling `ss -tin` on the given Mininet host.
 
@@ -258,7 +259,7 @@ def start_host_monitor(host, interval=1.0, t_start=None):
     stop_event = threading.Event()
     thread     = threading.Thread(
         target=_poll_loop,
-        args=(host, interval, stop_event, t_start),
+        args=(host, interval, stop_event, t_start, out_dir),
         daemon=True,
     )
     thread.start()

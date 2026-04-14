@@ -1,13 +1,13 @@
 SDN Congestion Detection - K-Means Labeling Justification
 ============================================================
-Silhouette Score : 0.7170 (Validates physical separation of the 3 states)
+Silhouette Score : 0.4125 (Validates physical separation of the 3 states)
 
 Derived Centroids:
-  Normal    : RTT_Ratio=1.008, Jitter=1349.1us, BW_Ratio=1.000
-  Onset     : RTT_Ratio=1.110, Jitter=13211.5us, BW_Ratio=0.981
-  Congested : RTT_Ratio=1.119, Jitter=13926.1us, BW_Ratio=0.410
+  Normal    : RTT_Ratio=1.070, Jitter=13574.0us, BW_Ratio=0.093
+  Onset     : RTT_Ratio=1.077, Jitter=14979.4us, BW_Ratio=0.576
+  Congested : RTT_Ratio=1.183, Jitter=38009.2us, BW_Ratio=0.196
 
 Extracted Maximum-Margin Boundaries (Used in build_dataset.py):
-  T_RTT_RATIO = 1.0585
-  T_RTTVAR_US = 1195.8005
-  T_BW_RATIO  = 0.6905
+  T_RTT_RATIO = 1.0137
+  T_RTTVAR_US = 2092.8000
+  T_BW_RATIO  = 0.6292
