@@ -280,7 +280,7 @@
   <div class="live-dot" id="liveLabel">LIVE</div>
   <div class="controls">
     <button class="btn btn-inject" onclick="inject()">⚡ Inject Traffic Surge</button>
-    <button class="btn btn-clear"  onclick="clear()">✓ Clear Traffic</button>
+    <button class="btn btn-clear"  onclick="clearTraffic()">✓ Clear Traffic</button>
   </div>
 </header>
 
@@ -690,7 +690,7 @@ function updateVideo(pred, throughput) {
 async function inject() {
   await fetch('/api/inject?flows=8', { method:'POST' });
 }
-async function clear() {
+async function clearTraffic() {
   await fetch('/api/clear', { method:'POST' });
 }
 
