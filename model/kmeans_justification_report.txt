@@ -1,6 +1,14 @@
 SDN Congestion Detection - K-Means Labeling Justification
 ============================================================
 Silhouette Score : 0.4125 (Validates physical separation of the 3 states)
+Calinski-Harabasz Index (Variance Ratio Criterion) : 3036.96
+This metric calculates the ratio of the variance between the clusters 
+(how far apart they are) to the variance within the clusters (how tight they are).
+Higher is better.
+Davies-Bouldin Index : 0.8787
+This metric calculates the average similarity between each cluster and its most similar counterpart. It is based on the ratio of within-cluster scatter to between-cluster separation. Lower is better (0 is perfect distance).
+
+
 
 Derived Centroids:
   Normal    : RTT_Ratio=1.070, Jitter=13574.0us, BW_Ratio=0.093
