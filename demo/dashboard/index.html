@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SDN CongestionShield — Live Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:       #0a0e1a;
+    --panel:    #111827;
+    --border:   #1e2d45;
+    --text:     #e2e8f0;
+    --muted:    #64748b;
+    --accent:   #3b82f6;
+    --normal:   #22c55e;
+    --onset:    #f59e0b;
+    --cong:     #ef4444;
+    --normal-d: #14532d;
+    --onset-d:  #78350f;
+    --cong-d:   #7f1d1d;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ── Header ─────────────────────────────────────────────── */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 24px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+  }
+  .logo { display: flex; align-items: center; gap: 10px; }
+  .logo-icon { font-size: 28px; }
+  .logo-text { font-size: 20px; font-weight: 700; letter-spacing: -0.5px; }
+  .logo-sub  { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
+
+  .live-dot {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 12px; color: var(--normal); font-weight: 600;
+  }
+  .live-dot::before {
+    content: ''; width: 8px; height: 8px; border-radius: 50%;
+    background: var(--normal);
+    animation: pulse 1.2s infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50%       { opacity: 0.4; transform: scale(0.7); }
+  }
+
+  .controls { display: flex; gap: 10px; }
+  .btn {
+    padding: 8px 18px; border-radius: 8px; border: none; cursor: pointer;
+    font-family: 'Inter', sans-serif; font-weight: 600; font-size: 13px;
+    transition: all 0.15s; letter-spacing: 0.2px;
+  }
+  .btn-inject {
+    background: linear-gradient(135deg, #ef4444, #b91c1c);
+    color: #fff; box-shadow: 0 0 16px #ef444440;
+  }
+  .btn-inject:hover { transform: translateY(-1px); box-shadow: 0 0 24px #ef444470; }
+  .btn-clear  {
+    background: linear-gradient(135deg, #22c55e, #15803d);
+    color: #fff; box-shadow: 0 0 16px #22c55e40;
+  }
+  .btn-clear:hover { transform: translateY(-1px); box-shadow: 0 0 24px #22c55e70; }
+
+  /* ── Main grid ───────────────────────────────────────────── */
+  .grid {
+    display: grid;
+    grid-template-columns: 260px 1fr 300px;
+    grid-template-rows: 1fr 220px;
+    gap: 12px;
+    padding: 12px;
+    flex: 1;
+    min-height: 0;
+  }
+
+  /* ── Panels ─────────────────────────────────────────────── */
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+    overflow: hidden;
+  }
+  .panel-title {
+    font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 1.5px; color: var(--muted); margin-bottom: 12px;
+  }
+
+  /* ── Prediction badge (left panel) ──────────────────────── */
+  .prediction-panel {
+    display: flex; flex-direction: column; align-items: center;
+    justify-content: center; gap: 16px;
+  }
+  .badge {
+    width: 160px; height: 160px; border-radius: 50%;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    font-weight: 900; font-size: 18px; letter-spacing: 1px;
+    border: 3px solid transparent;
+    transition: all 0.5s cubic-bezier(.4,0,.2,1);
+    position: relative;
+  }
+  .badge::after {
+    content: ''; position: absolute; inset: -8px; border-radius: 50%;
+    border: 1px solid transparent;
+    transition: all 0.5s;
+  }
+  .badge-icon { font-size: 40px; margin-bottom: 4px; }
+
+  .badge.NORMAL {
+    background: radial-gradient(circle, #14532d, #052e16);
+    color: var(--normal);
+    border-color: var(--normal);
+    box-shadow: 0 0 40px #22c55e50, inset 0 0 20px #22c55e10;
+  }
+  .badge.NORMAL::after { border-color: #22c55e40; animation: ring 2s infinite; }
+
+  .badge.ONSET {
+    background: radial-gradient(circle, #78350f, #431407);
+    color: var(--onset);
+    border-color: var(--onset);
+    box-shadow: 0 0 40px #f59e0b50, inset 0 0 20px #f59e0b10;
+  }
+
+  .badge.CONGESTED {
+    background: radial-gradient(circle, #7f1d1d, #450a0a);
+    color: var(--cong);
+    border-color: var(--cong);
+    box-shadow: 0 0 40px #ef444460, inset 0 0 20px #ef444820;
+    animation: shake 0.3s ease infinite;
+  }
+  @keyframes ring  { 0%,100%{transform:scale(1)}50%{transform:scale(1.05)} }
+  @keyframes shake { 0%,100%{transform:rotate(0)}25%{transform:rotate(-0.5deg)}75%{transform:rotate(0.5deg)} }
+
+  .conf-bar-wrap { width: 100%; }
+  .conf-label { font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+  .conf-bar-bg {
+    height: 6px; background: var(--border); border-radius: 4px; overflow: hidden;
+  }
+  .conf-bar { height: 100%; border-radius: 4px; transition: width 0.4s, background 0.4s; }
+
+  .stat-row { width: 100%; }
+  .stat-item {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 7px 0; border-bottom: 1px solid var(--border);
+    font-size: 12px;
+  }
+  .stat-item:last-child { border-bottom: none; }
+  .stat-label { color: var(--muted); }
+  .stat-val   { font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 700; }
+  .rate-badge {
+    display: inline-block; padding: 2px 8px; border-radius: 99px;
+    font-size: 10px; font-weight: 700; background: #7f1d1d; color: var(--cong);
+    margin-top: 6px; text-transform: uppercase; letter-spacing: 0.5px;
+    opacity: 0; transition: opacity 0.3s;
+  }
+  .rate-badge.visible { opacity: 1; }
+
+  /* ── Topology (center top) ───────────────────────────────── */
+  .topology-panel {
+    grid-column: 2; grid-row: 1;
+    display: flex; flex-direction: column;
+  }
+  .topo-svg-wrap { flex: 1; display: flex; align-items: center; justify-content: center; }
+  svg#topo { width: 100%; max-height: 260px; }
+
+  /* ── Incident log (right) ────────────────────────────────── */
+  .log-panel {
+    grid-column: 3; grid-row: 1 / 3;
+    display: flex; flex-direction: column;
+  }
+  .log-entries { flex: 1; overflow-y: auto; }
+  .log-entry {
+    display: flex; gap: 8px; padding: 8px 0;
+    border-bottom: 1px solid var(--border); font-size: 11px;
+  }
+  .log-time { color: var(--muted); font-family: 'JetBrains Mono', monospace; min-width: 46px; }
+  .log-dot  { width: 8px; height: 8px; border-radius: 50%; margin-top: 2px; flex-shrink: 0; }
+  .log-msg  { color: var(--text); line-height: 1.4; }
+
+  .dot-NORMAL     { background: var(--normal); }
+  .dot-ONSET      { background: var(--onset); }
+  .dot-CONGESTED  { background: var(--cong); box-shadow: 0 0 6px var(--cong); }
+  .dot-INJECT     { background: #a855f7; }
+  .dot-CLEAR      { background: var(--accent); }
+  .dot-AUTO-RESPONSE { background: var(--cong); }
+  .dot-RECOVERY   { background: var(--normal); }
+
+  /* ── Charts (bottom) ─────────────────────────────────────── */
+  .charts-row { grid-column: 1 / 3; grid-row: 2; display: flex; gap: 12px; }
+  .chart-panel { flex: 1; display: flex; flex-direction: column; }
+  .chart-wrap  { flex: 1; min-height: 0; position: relative; }
+
+  /* ── Scrollbar ───────────────────────────────────────────── */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+  /* ── Stat cards (inside topo panel) ──────────────────────── */
+  .stat-cards { display: flex; gap: 12px; margin-bottom: 10px; }
+  .stat-card {
+    flex: 1; background: #0f172a; border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px 14px;
+  }
+  .sc-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
+  .sc-val   { font-size: 22px; font-weight: 900; font-family: 'JetBrains Mono', monospace; margin-top: 2px; }
+  .sc-sub   { font-size: 10px; color: var(--muted); margin-top: 1px; }
+</style>
+</head>
+<body>
+
+<!-- ── Header ── -->
+<header>
+  <div class="logo">
+    <span class="logo-icon">🛡</span>
+    <div>
+      <div class="logo-text">SDN CongestionShield</div>
+      <div class="logo-sub">Autonomous Network Intelligence</div>
+    </div>
+  </div>
+  <div class="live-dot" id="liveLabel">LIVE</div>
+  <div class="controls">
+    <button class="btn btn-inject" onclick="inject()">⚡ Inject Traffic Surge</button>
+    <button class="btn btn-clear"  onclick="clear()">✓ Clear Traffic</button>
+  </div>
+</header>
+
+<!-- ── Main grid ── -->
+<div class="grid">
+
+  <!-- Left: Prediction badge -->
+  <div class="panel prediction-panel" style="grid-column:1;grid-row:1/3;">
+    <div class="panel-title">ML Prediction</div>
+
+    <div class="badge NORMAL" id="badge">
+      <div class="badge-icon" id="badgeIcon">✅</div>
+      <div id="badgeText">NORMAL</div>
+    </div>
+
+    <div class="conf-bar-wrap">
+      <div class="conf-label">Confidence: <span id="confPct">—</span></div>
+      <div class="conf-bar-bg"><div class="conf-bar" id="confBar" style="width:0%"></div></div>
+    </div>
+
+    <div class="stat-row">
+      <div class="stat-item">
+        <span class="stat-label">Utilisation</span>
+        <span class="stat-val" id="svUtil">—</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">Throughput</span>
+        <span class="stat-val" id="svThru">—</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">Overlimit /s</span>
+        <span class="stat-val" id="svOver">—</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">Elapsed</span>
+        <span class="stat-val" id="svTime">—</span>
+      </div>
+    </div>
+
+    <div class="rate-badge" id="rateBadge">⚠ Rate Limited</div>
+  </div>
+
+  <!-- Centre top: Topology + stat cards -->
+  <div class="panel topology-panel">
+    <div class="panel-title">Network Topology (Mininet / WSL2)</div>
+    <div class="stat-cards">
+      <div class="stat-card">
+        <div class="sc-label">Congestion Events</div>
+        <div class="sc-val" id="sc-events">0</div>
+        <div class="sc-sub">Since start</div>
+      </div>
+      <div class="stat-card">
+        <div class="sc-label">Detect Latency</div>
+        <div class="sc-val" id="sc-latency">—</div>
+        <div class="sc-sub">Last event</div>
+      </div>
+      <div class="stat-card">
+        <div class="sc-label">Avg Util.</div>
+        <div class="sc-val" id="sc-avgutil">—</div>
+        <div class="sc-sub">Last 30 s</div>
+      </div>
+    </div>
+    <div class="topo-svg-wrap">
+      <svg id="topo" viewBox="0 0 600 160">
+        <!-- Links -->
+        <line id="link1" x1="120" y1="80" x2="300" y2="80" stroke="#1e2d45" stroke-width="6" stroke-linecap="round"/>
+        <line id="link2" x1="300" y1="80" x2="480" y2="80" stroke="#1e2d45" stroke-width="6" stroke-linecap="round"/>
+
+        <!-- Animated packet dots -->
+        <circle id="pkt1a" r="5" fill="#3b82f6" opacity="0">
+          <animateMotion dur="1.2s" repeatCount="indefinite" begin="0s">
+            <mpath href="#link1path"/>
+          </animateMotion>
+        </circle>
+        <circle id="pkt1b" r="5" fill="#3b82f6" opacity="0">
+          <animateMotion dur="1.2s" repeatCount="indefinite" begin="0.6s">
+            <mpath href="#link1path"/>
+          </animateMotion>
+        </circle>
+        <circle id="pkt2a" r="5" fill="#3b82f6" opacity="0">
+          <animateMotion dur="1.2s" repeatCount="indefinite" begin="0.2s">
+            <mpath href="#link2path"/>
+          </animateMotion>
+        </circle>
+        <circle id="pkt2b" r="5" fill="#3b82f6" opacity="0">
+          <animateMotion dur="1.2s" repeatCount="indefinite" begin="0.8s">
+            <mpath href="#link2path"/>
+          </animateMotion>
+        </circle>
+
+        <!-- Hidden motion paths -->
+        <defs>
+          <path id="link1path" d="M120,80 L300,80"/>
+          <path id="link2path" d="M300,80 L480,80"/>
+        </defs>
+
+        <!-- h1 node -->
+        <circle cx="120" cy="80" r="36" fill="#0f172a" stroke="#3b82f6" stroke-width="2"/>
+        <text x="120" y="73" text-anchor="middle" fill="#3b82f6" font-size="20">💻</text>
+        <text x="120" y="92" text-anchor="middle" fill="#94a3b8" font-size="11" font-family="Inter">h1</text>
+        <text x="120" y="104" text-anchor="middle" fill="#64748b" font-size="9" font-family="Inter">Client</text>
+
+        <!-- s1 switch node -->
+        <rect id="switchRect" x="264" y="50" width="72" height="60" rx="8"
+              fill="#0f172a" stroke="#22c55e" stroke-width="2"/>
+        <text x="300" y="75" text-anchor="middle" fill="#22c55e" font-size="18">🔀</text>
+        <text x="300" y="92" text-anchor="middle" fill="#94a3b8" font-size="11" font-family="Inter">s1</text>
+        <text x="300" y="104" text-anchor="middle" fill="#64748b" font-size="9" font-family="Inter">OVS Switch</text>
+
+        <!-- h2 node -->
+        <circle cx="480" cy="80" r="36" fill="#0f172a" stroke="#a855f7" stroke-width="2"/>
+        <text x="480" y="73" text-anchor="middle" fill="#a855f7" font-size="20">🖥</text>
+        <text x="480" y="92" text-anchor="middle" fill="#94a3b8" font-size="11" font-family="Inter">h2</text>
+        <text x="480" y="104" text-anchor="middle" fill="#64748b" font-size="9" font-family="Inter">Server</text>
+
+        <!-- Link capacity labels -->
+        <text x="210" y="66" text-anchor="middle" fill="#64748b" font-size="9" font-family="Inter">5 Mbps</text>
+        <text x="390" y="66" text-anchor="middle" fill="#64748b" font-size="9" font-family="Inter">5 Mbps</text>
+
+        <!-- Util bar under link1 -->
+        <rect x="130" y="92" width="160" height="5" rx="2" fill="#1e2d45"/>
+        <rect id="util1bar" x="130" y="92" width="0" height="5" rx="2" fill="#22c55e"/>
+
+        <!-- Util bar under link2 -->
+        <rect x="310" y="92" width="160" height="5" rx="2" fill="#1e2d45"/>
+        <rect id="util2bar" x="310" y="92" width="0" height="5" rx="2" fill="#22c55e"/>
+      </svg>
+    </div>
+  </div>
+
+  <!-- Right: Incident log -->
+  <div class="panel log-panel">
+    <div class="panel-title">Incident Timeline</div>
+    <div class="log-entries" id="logEntries">
+      <div class="log-entry">
+        <span class="log-time">t=0s</span>
+        <div class="log-dot dot-NORMAL"></div>
+        <span class="log-msg">System started. Monitoring active.</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Charts row -->
+  <div class="charts-row">
+    <div class="panel chart-panel">
+      <div class="panel-title">Link Utilisation (%)</div>
+      <div class="chart-wrap"><canvas id="chartUtil"></canvas></div>
+    </div>
+    <div class="panel chart-panel">
+      <div class="panel-title">Throughput (Mbps)</div>
+      <div class="chart-wrap"><canvas id="chartThru"></canvas></div>
+    </div>
+    <div class="panel chart-panel">
+      <div class="panel-title">Overlimit Rate (/s)</div>
+      <div class="chart-wrap"><canvas id="chartOver"></canvas></div>
+    </div>
+  </div>
+
+</div><!-- /grid -->
+
+<script>
+// ── Chart factory ──────────────────────────────────────────────────────────
+const MAX_POINTS = 60;
+
+function mkChart(id, label, color, max) {
+  const ctx = document.getElementById(id).getContext('2d');
+  return new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: Array(MAX_POINTS).fill(''),
+      datasets: [{
+        label,
+        data: Array(MAX_POINTS).fill(null),
+        borderColor: color,
+        backgroundColor: color + '18',
+        borderWidth: 2,
+        pointRadius: 0,
+        fill: true,
+        tension: 0.4,
+      }]
+    },
+    options: {
+      animation: false,
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { display: false },
+        y: {
+          min: 0, max: max || undefined,
+          grid: { color: '#1e2d45' },
+          ticks: { color: '#64748b', font: { size: 10 } }
+        }
+      }
+    }
+  });
+}
+
+const chartUtil = mkChart('chartUtil', 'Utilisation', '#3b82f6', 110);
+const chartThru = mkChart('chartThru', 'Throughput',  '#a855f7');
+const chartOver = mkChart('chartOver', 'Overlimit',   '#ef4444');
+
+function pushChart(chart, val) {
+  chart.data.datasets[0].data.shift();
+  chart.data.datasets[0].data.push(val ?? null);
+  chart.update('none');
+}
+
+// ── State tracking ─────────────────────────────────────────────────────────
+let prevPred = null;
+let congEvents = 0;
+let congStartTime = null;
+let lastLatency = null;
+let utilHistory = [];
+let lastIncidentCount = 0;
+
+const ICONS   = { NORMAL:'✅', ONSET:'⚠️', CONGESTED:'🔴' };
+const COLORS  = { NORMAL: '#22c55e', ONSET: '#f59e0b', CONGESTED: '#ef4444' };
+const CONF_COLORS = { NORMAL: '#22c55e', ONSET: '#f59e0b', CONGESTED: '#ef4444' };
+
+// ── DOM helpers ────────────────────────────────────────────────────────────
+function setText(id, v) { document.getElementById(id).textContent = v; }
+function setWidth(id, pct) { document.getElementById(id).style.width = Math.min(100, pct) + '%'; }
+
+// ── Log renderer ───────────────────────────────────────────────────────────
+function renderLog(incidents) {
+  const el = document.getElementById('logEntries');
+  const newItems = incidents.slice(lastIncidentCount);
+  lastIncidentCount = incidents.length;
+
+  newItems.forEach(inc => {
+    const div = document.createElement('div');
+    div.className = 'log-entry';
+    div.innerHTML = `
+      <span class="log-time">t=${inc.t}s</span>
+      <div class="log-dot dot-${inc.kind}"></div>
+      <span class="log-msg">${inc.msg}</span>`;
+    el.prepend(div);   // newest at top
+  });
+}
+
+// ── Link colour helper ──────────────────────────────────────────────────────
+function utilColor(pct) {
+  if (pct > 90) return '#ef4444';
+  if (pct > 70) return '#f59e0b';
+  return '#22c55e';
+}
+
+// ── Main poll loop ─────────────────────────────────────────────────────────
+let lastSeenTs = -1;
+
+async function poll() {
+  try {
+    const [stateRes, histRes] = await Promise.all([
+      fetch('/api/state').then(r => r.json()),
+      fetch('/api/history').then(r => r.json()),
+    ]);
+
+    const s    = stateRes;
+    const hist = histRes;
+
+    // ── Badge ──
+    const pred = s.prediction;
+    const badge = document.getElementById('badge');
+    badge.className = 'badge ' + pred;
+    document.getElementById('badgeIcon').textContent = ICONS[pred] || '🔵';
+    document.getElementById('badgeText').textContent = pred;
+
+    // ── Confidence bar ──
+    const conf = (s.confidence * 100).toFixed(1);
+    setText('confPct', conf + '%');
+    const cb = document.getElementById('confBar');
+    cb.style.width   = conf + '%';
+    cb.style.background = CONF_COLORS[pred];
+
+    // ── Stat values ──
+    setText('svUtil', (s.util_pct ?? 0).toFixed(1) + '%');
+    setText('svThru', (s.throughput ?? 0).toFixed(2) + ' Mbps');
+    setText('svOver', (s.overlimit_rate ?? 0).toFixed(1) + '/s');
+    setText('svTime', (s.t ?? 0).toFixed(0) + 's');
+
+    // ── Rate limit badge ──
+    const rb = document.getElementById('rateBadge');
+    rb.className = 'rate-badge' + (s.rate_limited ? ' visible' : '');
+
+    // ── Topology link colours ──
+    const uc = utilColor(s.util_pct ?? 0);
+    document.getElementById('link1').setAttribute('stroke', uc);
+    document.getElementById('link2').setAttribute('stroke', uc);
+    document.getElementById('switchRect').setAttribute('stroke', uc);
+
+    const utilPct = Math.min(160, (s.util_pct ?? 0) / 100 * 160);
+    document.getElementById('util1bar').setAttribute('width', utilPct);
+    document.getElementById('util2bar').setAttribute('width', utilPct);
+    document.getElementById('util1bar').setAttribute('fill', uc);
+    document.getElementById('util2bar').setAttribute('fill', uc);
+
+    // ── Packet dots visibility ──
+    const dotsVisible = (s.util_pct ?? 0) > 5;
+    ['pkt1a','pkt1b','pkt2a','pkt2b'].forEach(id => {
+      document.getElementById(id).setAttribute('opacity', dotsVisible ? '0.8' : '0');
+    });
+
+    // ── Congestion event tracking ──
+    if (pred === 'CONGESTED' && prevPred !== 'CONGESTED') {
+      congEvents++;
+      congStartTime = s.t;
+      setText('sc-events', congEvents);
+    }
+    if (prevPred === 'CONGESTED' && pred === 'NORMAL' && congStartTime !== null) {
+      lastLatency = (s.t - congStartTime).toFixed(1);
+      setText('sc-latency', lastLatency + 's');
+      congStartTime = null;
+    }
+    prevPred = pred;
+
+    // ── Average utilisation (last 30 points from history) ──
+    if (hist.length > 0) {
+      const recent = hist.slice(-30).map(h => h.util_pct ?? 0);
+      const avg = recent.reduce((a,b)=>a+b,0)/recent.length;
+      setText('sc-avgutil', avg.toFixed(1) + '%');
+
+      // Push latest chart point
+      const last = hist[hist.length - 1];
+      pushChart(chartUtil, last.util_pct ?? 0);
+      pushChart(chartThru, last.throughput ?? 0);
+      pushChart(chartOver, last.overlimit_rate ?? 0);
+    }
+
+    // ── Log ──
+    if (s.incidents) renderLog(s.incidents);
+
+    document.getElementById('liveLabel').style.color = '#22c55e';
+
+  } catch(e) {
+    document.getElementById('liveLabel').style.color = '#ef4444';
+    document.getElementById('liveLabel').textContent  = 'DISCONNECTED';
+  }
+}
+
+// ── Control buttons ────────────────────────────────────────────────────────
+async function inject() {
+  await fetch('/api/inject?flows=8', { method:'POST' });
+}
+async function clear() {
+  await fetch('/api/clear', { method:'POST' });
+}
+
+// ── Start polling ──────────────────────────────────────────────────────────
+poll();
+setInterval(poll, 1000);
+</script>
+</body>
+</html>
