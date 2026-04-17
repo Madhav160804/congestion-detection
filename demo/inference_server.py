@@ -32,9 +32,9 @@ CONGESTION_THRESH = 3          # consecutive "congested" predictions → auto-re
 RECOVERY_THRESH   = 5          # consecutive "normal" predictions → lift response
 RATE_LIMIT_MBPS   = 2.0        # apply this rate cap when congested
 
-MODEL_PATH   = os.path.join(ROOT, "model", "best_model.pkl")
-SCALER_PATH  = os.path.join(ROOT, "model", "scaler.pkl")
-FEAT_PATH    = os.path.join(ROOT, "model", "feature_names.txt")
+MODEL_PATH   = os.path.join(ROOT, "model", "demo_model.pkl")
+SCALER_PATH  = os.path.join(ROOT, "model", "demo_scaler.pkl")
+FEAT_PATH    = os.path.join(ROOT, "model", "demo_feature_names.txt")
 
 # ── qdisc parsing (mirrors collect_switch_metrics.py) ───────────────────────
 _QDISC_HDR_RE = re.compile(r'qdisc\s+(\S+)\s+(\S+):')

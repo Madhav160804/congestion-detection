@@ -205,6 +205,46 @@
   .chart-panel { flex: 1; display: flex; flex-direction: column; }
   .chart-wrap  { flex: 1; min-height: 0; position: relative; }
 
+  /* ── Video simulation panel ──────────────────────────────── */
+  .video-panel { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; }
+  .video-screen {
+    width: 100%; flex: 1;
+    background: #000; border-radius: 8px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    position: relative; overflow: hidden;
+    border: 2px solid var(--border);
+  }
+  .video-bars {
+    display: flex; gap: 3px; align-items: flex-end; height: 40px;
+  }
+  .video-bar {
+    width: 5px; border-radius: 3px; background: #22c55e;
+    animation: equalizer 0.6s ease infinite;
+  }
+  .video-bar:nth-child(1) { animation-delay: 0s;    height: 60%; }
+  .video-bar:nth-child(2) { animation-delay: 0.1s;  height: 90%; }
+  .video-bar:nth-child(3) { animation-delay: 0.2s;  height: 50%; }
+  .video-bar:nth-child(4) { animation-delay: 0.05s; height: 80%; }
+  .video-bar:nth-child(5) { animation-delay: 0.15s; height: 65%; }
+  .video-bar:nth-child(6) { animation-delay: 0.25s; height: 75%; }
+  .video-bar:nth-child(7) { animation-delay: 0.08s; height: 45%; }
+  @keyframes equalizer {
+    0%, 100% { transform: scaleY(1); }
+    50%       { transform: scaleY(0.3); }
+  }
+  .buffer-ring {
+    width: 44px; height: 44px; border-radius: 50%;
+    border: 4px solid transparent;
+    border-top-color: #a855f7;
+    animation: spin 0.9s linear infinite;
+    display: none;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .video-status { font-size: 11px; font-weight: 700; color: var(--normal); letter-spacing: 0.3px; }
+  .video-quality { font-size: 10px; color: var(--muted); }
+  .video-bitrate { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--accent); }
+
+
   /* ── Scrollbar ───────────────────────────────────────────── */
   ::-webkit-scrollbar { width: 4px; }
   ::-webkit-scrollbar-track { background: transparent; }
@@ -380,6 +420,22 @@
 
   <!-- Charts row -->
   <div class="charts-row">
+    <!-- Video streaming simulation panel -->
+    <div class="panel chart-panel video-panel">
+      <div class="panel-title">🎬 Live Video Stream (h1 → h2)</div>
+      <div class="video-screen" id="videoScreen">
+        <div class="video-bars" id="videoBars">
+          <div class="video-bar"></div><div class="video-bar"></div>
+          <div class="video-bar"></div><div class="video-bar"></div>
+          <div class="video-bar"></div><div class="video-bar"></div>
+          <div class="video-bar"></div>
+        </div>
+        <div class="buffer-ring" id="bufferRing"></div>
+      </div>
+      <div class="video-status" id="videoStatus">▶ Streaming</div>
+      <div class="video-quality" id="videoQuality">1080p HD · h264</div>
+      <div class="video-bitrate" id="videoBitrate">2.8 Mbps</div>
+    </div>
     <div class="panel chart-panel">
       <div class="panel-title">Link Utilisation (%)</div>
       <div class="chart-wrap"><canvas id="chartUtil"></canvas></div>
@@ -568,11 +624,60 @@ async function poll() {
     // ── Log ──
     if (s.incidents) renderLog(s.incidents);
 
+    // ── Video simulation ──
+    updateVideo(pred, s.throughput ?? 0);
+
     document.getElementById('liveLabel').style.color = '#22c55e';
 
   } catch(e) {
     document.getElementById('liveLabel').style.color = '#ef4444';
     document.getElementById('liveLabel').textContent  = 'DISCONNECTED';
+  }
+}
+
+// ── Video streaming simulation ───────────────────────────────────────────
+function updateVideo(pred, throughput) {
+  const bars   = document.getElementById('videoBars');
+  const ring   = document.getElementById('bufferRing');
+  const status = document.getElementById('videoStatus');
+  const qual   = document.getElementById('videoQuality');
+  const brate  = document.getElementById('videoBitrate');
+  const screen = document.getElementById('videoScreen');
+  const barEls = document.querySelectorAll('.video-bar');
+
+  if (pred === 'CONGESTED') {
+    // Buffering state
+    bars.style.display  = 'none';
+    ring.style.display  = 'block';
+    status.textContent  = '⏸ Buffering…';
+    status.style.color  = '#ef4444';
+    qual.textContent    = 'Quality Degraded';
+    brate.textContent   = (Math.max(0, throughput * 0.3)).toFixed(2) + ' Mbps';
+    screen.style.borderColor = '#ef4444';
+    screen.style.boxShadow   = '0 0 18px #ef444440';
+    barEls.forEach(b => b.style.background = '#ef4444');
+  } else if (pred === 'ONSET') {
+    // Reduced quality
+    bars.style.display  = 'flex';
+    ring.style.display  = 'none';
+    status.textContent  = '▶ Streaming (reduced)';
+    status.style.color  = '#f59e0b';
+    qual.textContent    = '480p SD · h264';
+    brate.textContent   = (Math.max(0.2, throughput * 0.6)).toFixed(2) + ' Mbps';
+    screen.style.borderColor = '#f59e0b';
+    screen.style.boxShadow   = '0 0 18px #f59e0b30';
+    barEls.forEach(b => b.style.background = '#f59e0b');
+  } else {
+    // Normal HD streaming
+    bars.style.display  = 'flex';
+    ring.style.display  = 'none';
+    status.textContent  = '▶ Streaming';
+    status.style.color  = '#22c55e';
+    qual.textContent    = '1080p HD · h264';
+    brate.textContent   = (Math.max(0.5, throughput * 0.9)).toFixed(2) + ' Mbps';
+    screen.style.borderColor = '#22c55e';
+    screen.style.boxShadow   = '0 0 18px #22c55e20';
+    barEls.forEach(b => b.style.background = '#22c55e');
   }
 }
 
