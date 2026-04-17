@@ -10,8 +10,9 @@ Run with:
 Then open: http://localhost:5050  in your Windows browser.
 """
 
-import os, sys, re, time, json, pickle, threading, subprocess, collections
+import os, sys, re, time, json, pickle, threading, subprocess, collections, warnings
 import numpy as np
+warnings.filterwarnings("ignore")   # suppress numpy/bottleneck compatibility warnings
 
 # ── Ensure we can import from project root ──────────────────────────────────
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -28,6 +29,7 @@ from mininet.log import setLogLevel
 LINK_BW_MBPS      = 5.0
 POLL_INTERVAL     = 1.0        # seconds
 HISTORY_LEN       = 120        # keep 120 seconds of history for dashboard
+WARMUP_SECS       = 35         # don't predict until we have enough history
 CONGESTION_THRESH = 3          # consecutive "congested" predictions → auto-response
 RECOVERY_THRESH   = 5          # consecutive "normal" predictions → lift response
 RATE_LIMIT_MBPS   = 2.0        # apply this rate cap when congested
@@ -265,7 +267,10 @@ def poll_loop():
         pred_label = "NORMAL"
         confidence = 1.0
 
-        if feats is not None and not np.any(np.isnan(feats)):
+        # Don't predict during warmup — wait for enough history
+        warming_up = (time.time() - _t_start) < WARMUP_SECS
+
+        if not warming_up and feats is not None and not np.any(np.isnan(feats)):
             feats_scaled = scaler.transform(feats.reshape(1, -1))
             proba = model.predict_proba(feats_scaled)[0]
             pred_class = int(np.argmax(proba))
